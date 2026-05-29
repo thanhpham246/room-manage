@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: room_manage
+      POSTGRES_USER: room_manage
+      POSTGRES_PASSWORD: room_manage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U room_manage -d room_manage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - room_manage_net
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      ROOM_MANAGE_ENVIRONMENT: local
+      ROOM_MANAGE_DATABASE_URL: postgresql+psycopg://room_manage:room_manage@db:5432/room_manage
+      ROOM_MANAGE_SECRET_KEY: change-this-local-secret
+      ROOM_MANAGE_COOKIE_SECURE: "false"
+      ROOM_MANAGE_PASSWORD_HASH_ROUNDS: "12"
+      ROOM_MANAGE_CORS_ORIGINS: '["http://localhost:13000","http://localhost:3000"]'
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "18000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - room_manage_net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:18000/api/v1
+    environment:
+      API_INTERNAL_URL: http://backend:8000/api/v1
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:18000/api/v1
+    depends_on:
+      - backend
+    ports:
+      - "13000:3000"
+    networks:
+      - room_manage_net
+
+volumes:
+  postgres_data:
+
+networks:
+  room_manage_net:
+    driver: bridge

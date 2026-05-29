@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 250 250 249;
+  --foreground: 17 24 39;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

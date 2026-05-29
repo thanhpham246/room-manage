@@ -209,6 +209,19 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Node / Next.js
+node_modules/
+.next/
+out/
+test-results/
+playwright-report/
+blob-report/
+tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
