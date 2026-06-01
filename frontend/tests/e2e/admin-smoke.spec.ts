@@ -32,6 +32,12 @@ test("logs in and opens the dashboard", async ({ page }) => {
   await loginAsAdmin(page);
   await expect(page.getByText("Tổng thu tháng")).toBeVisible();
   await expect(page.getByText("Dòng tiền")).toBeVisible();
+  await page.goto("/buildings");
+  await page.getByRole("link", { name: "Nguyen Trai House" }).click();
+  await expect(page).toHaveURL(/\/buildings\/\d+$/);
+  await page.getByRole("link", { name: "Sửa" }).click();
+  await expect(page.getByLabel("Mã nhà")).toBeDisabled();
+  await expect(page.getByLabel("Loại nhà")).toBeDisabled();
 });
 
 test("creates a building with generated rooms and records a payment", async ({ page }) => {
@@ -50,18 +56,20 @@ test("creates a building with generated rooms and records a payment", async ({ p
   await page.getByLabel("Tiền cọc mặc định").fill("2500000");
   await page.getByLabel("Số phòng tầng 1").fill("2");
   await page.getByLabel("Số phòng tầng 2").fill("3");
-  await page.getByLabel("Wifi").check();
-  await page.getByLabel("Camera").check();
-  await page.getByLabel("Bãi xe").check();
+  await page.getByLabel("Tên tiện ích 1").fill("Wifi");
+  await page.getByRole("button", { name: "Thêm tiện ích" }).click();
+  await page.getByLabel("Tên tiện ích 2").fill("Camera");
+  await page.getByRole("button", { name: "Thêm tiện ích" }).click();
+  await page.getByLabel("Tên tiện ích 3").fill("Bãi xe");
   await page.getByRole("button", { name: "Lưu thông tin" }).click();
   await expect(page).toHaveURL(/\/buildings\/\d+$/);
   const buildingId = page.url().match(/\/buildings\/(\d+)$/)?.[1];
   expect(buildingId).toBeTruthy();
   await expect(page.getByRole("heading", { name: buildingName })).toBeVisible();
-  await expect(page.getByText("101")).toBeVisible();
-  await expect(page.getByText("102")).toBeVisible();
-  await expect(page.getByText("201")).toBeVisible();
-  await expect(page.getByText("203")).toBeVisible();
+  await expect(page.getByRole("link", { exact: true, name: "101" })).toBeVisible();
+  await expect(page.getByRole("link", { exact: true, name: "102" })).toBeVisible();
+  await expect(page.getByRole("link", { exact: true, name: "201" })).toBeVisible();
+  await expect(page.getByRole("link", { exact: true, name: "203" })).toBeVisible();
   await expect(page.getByText("Tổng phòng")).toBeVisible();
 
   await page.getByRole("link", { name: "101" }).click();
@@ -80,7 +88,7 @@ test("creates a building with generated rooms and records a payment", async ({ p
   await expect(page.getByText("Studio")).toBeVisible();
 
   await page.goto(`/rooms?building_id=${buildingId}&status=reserved&search=${editedRoomName}`);
-  await expect(page.getByRole("link", { name: editedRoomCode })).toBeVisible();
+  await expect(page.getByRole("link", { exact: true, name: editedRoomCode })).toBeVisible();
 
   await page.goto("/rooms/create");
   await page.getByLabel("Nhà").selectOption({ label: `PW-${suffix} - ${buildingName}` });
@@ -94,11 +102,17 @@ test("creates a building with generated rooms and records a payment", async ({ p
   await page.goto(`/buildings/${buildingId}`);
   await page.getByRole("link", { name: "Sửa" }).click();
   await page.getByLabel("Trạng thái").selectOption("under_renovation");
-  await page.getByLabel("Bảo vệ").check();
+  await expect(page.getByLabel("Mã nhà")).toBeDisabled();
+  await page.getByRole("button", { name: "Thêm tiện ích" }).click();
+  await page.getByLabel("Tên tiện ích 4").fill("Bảo vệ");
+  await page.getByRole("button", { name: "Thêm chi phí" }).click();
+  await page.getByLabel("Tên chi phí 4").fill("Thang máy");
+  await page.getByLabel("Số tiền chi phí 4").fill("700000");
   await page.getByRole("button", { name: "Lưu thông tin" }).click();
   await expect(page).toHaveURL(/\/buildings\/\d+$/);
   await expect(page.getByText("Đang sửa chữa")).toBeVisible();
   await expect(page.getByText("Bảo vệ")).toBeVisible();
+  await expect(page.getByText("Thang máy")).toBeVisible();
 
   const invoiceId = await getPayableInvoiceId(page);
   const method = `playwright-${Date.now()}`;

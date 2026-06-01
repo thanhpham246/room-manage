@@ -37,14 +37,32 @@ backend/
 ├── app/
 │   ├── api/
 │   │   └── v1/
-│   │       └── routers/
+│   │       └── router.py
 │   ├── core/
 │   ├── db/
 │   ├── dependencies/
 │   ├── models/
-│   ├── repositories/
-│   ├── schemas/
-│   ├── services/
+│   ├── modules/
+│   │   ├── buildings/
+│   │   │   ├── repository.py
+│   │   │   ├── router.py
+│   │   │   ├── schemas.py
+│   │   │   └── service.py
+│   │   ├── contracts/
+│   │   │   ├── repository.py
+│   │   │   ├── router.py
+│   │   │   ├── schemas.py
+│   │   │   └── service.py
+│   │   ├── rooms/
+│   │   │   ├── repository.py
+│   │   │   ├── router.py
+│   │   │   ├── schemas.py
+│   │   │   └── service.py
+│   │   └── tenants/
+│   │       ├── repository.py
+│   │       ├── router.py
+│   │       ├── schemas.py
+│   │       └── service.py
 │   └── main.py
 ├── alembic/
 └── tests/
@@ -58,6 +76,9 @@ Layer rules:
 - Repositories own persistence queries and SQLAlchemy details.
 - Models represent database tables only.
 - Dependencies provide database sessions, authenticated users, and role checks.
+- New domain code should live under `app/modules/{domain}/`.
+- Keep centralized SQLAlchemy models in `app/models/entities.py` until a later explicit model-split phase.
+- Legacy `app/schemas`, `app/services`, `app/repositories`, and `app/api/v1/routers` compatibility exports may remain only to avoid breaking existing imports during incremental migration.
 
 Allowed dependency direction:
 
@@ -65,6 +86,7 @@ Allowed dependency direction:
 router -> service -> repository -> model
 router -> schema
 service -> schema only when useful for input/output typing
+module router -> module service -> module repository -> model
 ```
 
 Disallowed dependency direction:
@@ -118,7 +140,7 @@ Frontend rules:
 - `buildings`: managed properties.
 - `rooms`: rentable units under buildings.
 - `tenants`: renter profiles.
-- `contracts`: room occupancy, rent, deposit, and lifecycle.
+- `contracts`: asset occupancy for room or whole-building rentals, rent, deposit, and lifecycle.
 - `meter_readings`: electricity and water readings by room and month.
 - `invoices`: monthly rent, utilities, services, adjustments, and totals.
 - `payments`: invoice payment records and invoice status updates.
@@ -130,9 +152,13 @@ Frontend rules:
 - REST API lives under `/api/v1`.
 - List endpoints support pagination.
 - Search and filters are added where the UI needs them.
+- PostgreSQL search for operational list pages should use indexed normalized search expressions.
+- Prefer `pg_trgm` GIN indexes for partial code/name/address/profile search on Buildings, Rooms, and Tenants.
+- Avoid per-column `%term%` `ILIKE` chains on high-traffic list pages when an indexed search expression exists.
 - Use explicit request and response schemas.
 - Use stable status values via enums where practical.
 - Return Vietnamese UI text from the frontend, not hard-coded backend messages, unless the message is an API validation error.
+- Asset-aware invoices must carry `building_id`; `room_id` is nullable for whole-building contracts.
 
 ## Infrastructure
 

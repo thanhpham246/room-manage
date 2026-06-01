@@ -19,15 +19,16 @@ class BillingService:
             if self.billing.invoice_exists(contract.id, payload.billing_month):
                 raise ConflictError("Invoice already exists for contract and month")
 
-            meter_reading = MeterReading(
-                room_id=contract.room_id,
-                billing_month=payload.billing_month,
-                electricity_previous=reading.electricity_previous,
-                electricity_current=reading.electricity_current,
-                water_previous=reading.water_previous,
-                water_current=reading.water_current,
-            )
-            self.billing.create_meter_reading(meter_reading)
+            if contract.room_id is not None:
+                meter_reading = MeterReading(
+                    room_id=contract.room_id,
+                    billing_month=payload.billing_month,
+                    electricity_previous=reading.electricity_previous,
+                    electricity_current=reading.electricity_current,
+                    water_previous=reading.water_previous,
+                    water_current=reading.water_current,
+                )
+                self.billing.create_meter_reading(meter_reading)
             invoices.append(self._build_invoice(payload, reading))
 
         for invoice in invoices:
@@ -56,6 +57,7 @@ class BillingService:
         )
         return Invoice(
             contract_id=contract.id,
+            building_id=contract.building_id,
             room_id=contract.room_id,
             tenant_id=contract.tenant_id,
             billing_month=payload.billing_month,

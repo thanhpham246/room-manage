@@ -61,6 +61,15 @@ async def test_room_crud_supports_building_filter(
     assert list_response.json()["total"] == 2
     assert {item["name"] for item in list_response.json()["items"]} == {"101", "102"}
 
+    search_response = await authenticated_client.get(
+        "/api/v1/rooms",
+        params={"building_id": building_id, "search": "  HOUSE-101-102  "},
+    )
+
+    assert search_response.status_code == 200
+    assert search_response.json()["total"] == 1
+    assert search_response.json()["items"][0]["code"] == "HOUSE-101-102"
+
 
 @pytest.mark.anyio
 async def test_building_create_generates_floors_rooms_amenities_and_templates(
@@ -275,6 +284,154 @@ async def test_building_update_replaces_metadata_amenities_and_templates(
 
     assert list_response.status_code == 200
     assert list_response.json()["total"] == 1
+
+    normalized_search_response = await authenticated_client.get(
+        "/api/v1/buildings",
+        params={"search": "  edited   house  ", "status": "under_renovation"},
+    )
+
+    assert normalized_search_response.status_code == 200
+    assert normalized_search_response.json()["total"] == 1
+
+
+@pytest.mark.anyio
+async def test_building_update_locks_code_after_rooms_exist(
+    authenticated_client: httpx.AsyncClient,
+) -> None:
+    create_response = await authenticated_client.post(
+        "/api/v1/buildings",
+        json={
+            "code": "HOUSE-884",
+            "name": "Code Locked House",
+            "address": "884 Test",
+            "house_type": "boarding_house",
+            "default_room_rent_price": 2500000,
+            "floors": [{"floor_number": 1, "expected_room_count": 1}],
+        },
+    )
+    assert create_response.status_code == 201
+    building_id = create_response.json()["id"]
+
+    code_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={"code": "HOUSE-884-NEW"},
+    )
+    type_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={"house_type": "mini_apartment"},
+    )
+
+    assert code_response.status_code == 409
+    assert type_response.status_code == 200
+    assert type_response.json()["house_type"] == "mini_apartment"
+
+
+@pytest.mark.anyio
+async def test_building_update_locks_house_type_with_active_contract_only(
+    authenticated_client: httpx.AsyncClient,
+) -> None:
+    manager_id = await create_staff_user(authenticated_client)
+    create_response = await authenticated_client.post(
+        "/api/v1/buildings",
+        json={
+            "code": "HOUSE-885",
+            "name": "Active Contract House",
+            "address": "885 Test",
+            "house_type": "boarding_house",
+            "default_room_rent_price": 2800000,
+            "floors": [{"floor_number": 1, "expected_room_count": 1}],
+        },
+    )
+    assert create_response.status_code == 201
+    building_id = create_response.json()["id"]
+    room = (await authenticated_client.get(f"/api/v1/rooms?building_id={building_id}")).json()[
+        "items"
+    ][0]
+    tenant_response = await authenticated_client.post(
+        "/api/v1/tenants",
+        json={"full_name": "Locked Type Tenant", "phone": "0900000885"},
+    )
+    assert tenant_response.status_code == 201
+    contract_response = await authenticated_client.post(
+        "/api/v1/contracts",
+        json={
+            "room_id": room["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-05-01",
+            "end_date": "2027-05-01",
+            "monthly_rent": 2800000,
+            "deposit_amount": 2800000,
+        },
+    )
+    assert contract_response.status_code == 201
+
+    type_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={"house_type": "mini_apartment"},
+    )
+    operational_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={
+            "status": "under_renovation",
+            "manager_id": manager_id,
+            "phone": "02808850885",
+            "amenities": ["camera", "security"],
+            "expense_templates": [
+                {"category": "security", "name": "Security", "default_amount": 2000000}
+            ],
+        },
+    )
+
+    assert type_response.status_code == 409
+    assert operational_response.status_code == 200
+    body = operational_response.json()
+    assert body["house_type"] == "boarding_house"
+    assert body["status"] == "under_renovation"
+    assert body["manager_id"] == manager_id
+    assert body["phone"] == "02808850885"
+    assert set(body["amenities"]) == {"camera", "security"}
+    assert [template["name"] for template in body["expense_templates"]] == ["Security"]
+
+
+@pytest.mark.anyio
+async def test_building_update_supports_custom_amenities_and_simple_expenses(
+    authenticated_client: httpx.AsyncClient,
+) -> None:
+    create_response = await authenticated_client.post(
+        "/api/v1/buildings",
+        json={
+            "code": "HOUSE-886",
+            "name": "Custom Amenity House",
+            "address": "886 Test",
+        },
+    )
+    assert create_response.status_code == 201
+    building_id = create_response.json()["id"]
+
+    duplicate_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={"amenities": ["Wifi", "wifi"]},
+    )
+    success_response = await authenticated_client.patch(
+        f"/api/v1/buildings/{building_id}",
+        json={
+            "amenities": ["Wifi", "Rooftop garden"],
+            "expense_templates": [
+                {"name": "Wifi", "default_amount": 300000},
+                {"name": "Cleaning", "default_amount": 500000},
+            ],
+        },
+    )
+
+    assert duplicate_response.status_code == 400
+    assert success_response.status_code == 200
+    body = success_response.json()
+    assert set(body["amenities"]) == {"Wifi", "Rooftop garden"}
+    assert [template["name"] for template in body["expense_templates"]] == [
+        "Wifi",
+        "Cleaning",
+    ]
+    assert {template["category"] for template in body["expense_templates"]} == {"common"}
 
 
 @pytest.mark.anyio

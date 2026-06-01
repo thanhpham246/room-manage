@@ -2,16 +2,16 @@ from fastapi import APIRouter
 
 from app.api.v1.routers import (
     auth,
-    buildings,
     contracts,
     dashboard,
     expenses,
     invoices,
     payments,
-    rooms,
     tenants,
     users,
 )
+from app.modules.buildings.router import router as buildings_router
+from app.modules.rooms.router import router as rooms_router
 
 api_router = APIRouter()
 
@@ -23,8 +23,8 @@ async def api_health() -> dict[str, str]:
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(buildings.router, prefix="/buildings", tags=["buildings"])
-api_router.include_router(rooms.router, prefix="/rooms", tags=["rooms"])
+api_router.include_router(buildings_router, prefix="/buildings", tags=["buildings"])
+api_router.include_router(rooms_router, prefix="/rooms", tags=["rooms"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(contracts.router, prefix="/contracts", tags=["contracts"])
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])

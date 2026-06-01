@@ -159,22 +159,37 @@ def seed() -> None:
                     )
                 )
 
-        tenant = db.query(Tenant).filter(Tenant.phone == "0900000001").one_or_none()
+        tenant = db.query(Tenant).filter(Tenant.phone == "0900000001").order_by(Tenant.id).first()
         if tenant is None:
             tenant = Tenant(
+                tenant_code="TENANT-001",
                 full_name="Nguyen Van A",
                 phone="0900000001",
                 email="tenant@example.com",
-                emergency_contact="0900000002",
+                zalo="0900000001",
+                identity_type="cccd",
+                identity_number="079000000001",
+                emergency_contact_name="Demo Emergency Tenant",
+                emergency_contact_phone="0900000002",
             )
             db.add(tenant)
             db.flush()
+        else:
+            tenant.tenant_code = tenant.tenant_code or "TENANT-001"
+            tenant.zalo = tenant.zalo or "0900000001"
+            tenant.identity_type = tenant.identity_type or "cccd"
+            tenant.identity_number = tenant.identity_number or "079000000001"
+            tenant.emergency_contact_name = tenant.emergency_contact_name or "Demo Emergency Tenant"
+            tenant.emergency_contact_phone = tenant.emergency_contact_phone or "0900000002"
 
         room = db.query(Room).filter(Room.building_id == building.id).first()
-        contract = db.query(Contract).filter(Contract.tenant_id == tenant.id).one_or_none()
+        contract = db.query(Contract).filter(Contract.tenant_id == tenant.id).order_by(Contract.id).first()
         if room is not None and contract is None:
             room.status = "occupied"
             contract = Contract(
+                contract_code="CONTRACT-001",
+                scope="room",
+                building_id=room.building_id,
                 room_id=room.id,
                 tenant_id=tenant.id,
                 start_date=date(2026, 5, 1),
@@ -185,6 +200,11 @@ def seed() -> None:
             )
             db.add(contract)
             db.flush()
+        elif contract is not None:
+            contract.contract_code = contract.contract_code or "CONTRACT-001"
+            contract.scope = contract.scope or "room"
+            if contract.building_id is None and room is not None:
+                contract.building_id = room.building_id
 
         if contract is not None:
             invoice = (
@@ -198,6 +218,7 @@ def seed() -> None:
             if invoice is None:
                 invoice = Invoice(
                     contract_id=contract.id,
+                    building_id=contract.building_id,
                     room_id=contract.room_id,
                     tenant_id=contract.tenant_id,
                     billing_month=date(2026, 5, 1),

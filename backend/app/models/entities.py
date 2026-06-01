@@ -70,6 +70,8 @@ class Building(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="BuildingExpenseTemplate.id",
     )
+    contracts: Mapped[list["Contract"]] = relationship(back_populates="building")
+    invoices: Mapped[list["Invoice"]] = relationship(back_populates="building")
     expenses: Mapped[list["Expense"]] = relationship(back_populates="building")
 
 
@@ -146,11 +148,24 @@ class Tenant(Base, TimestampMixin):
     __tablename__ = "tenants"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
     phone: Mapped[str] = mapped_column(String(50), index=True)
     email: Mapped[str | None] = mapped_column(String(255))
+    zalo: Mapped[str | None] = mapped_column(String(100))
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
+    gender: Mapped[str | None] = mapped_column(String(32))
+    identity_type: Mapped[str | None] = mapped_column(String(32))
     identity_number: Mapped[str | None] = mapped_column(String(100))
-    emergency_contact: Mapped[str | None] = mapped_column(String(255))
+    identity_issued_date: Mapped[date | None] = mapped_column(Date)
+    identity_issued_place: Mapped[str | None] = mapped_column(String(255))
+    permanent_address: Mapped[str | None] = mapped_column(String(500))
+    current_address: Mapped[str | None] = mapped_column(String(500))
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(50))
+    emergency_contact_relationship: Mapped[str | None] = mapped_column(String(100))
+    note: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     contracts: Mapped[list["Contract"]] = relationship(back_populates="tenant")
 
@@ -159,7 +174,10 @@ class Contract(Base, TimestampMixin):
     __tablename__ = "contracts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
+    contract_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String(32), default="room", index=True)
+    building_id: Mapped[int] = mapped_column(ForeignKey("buildings.id"), index=True)
+    room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
@@ -167,8 +185,10 @@ class Contract(Base, TimestampMixin):
     deposit_amount: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
     note: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
-    room: Mapped[Room] = relationship(back_populates="contracts")
+    building: Mapped[Building] = relationship(back_populates="contracts")
+    room: Mapped[Room | None] = relationship(back_populates="contracts")
     tenant: Mapped[Tenant] = relationship(back_populates="contracts")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="contract")
 
@@ -196,7 +216,8 @@ class Invoice(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id"), index=True)
-    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
+    building_id: Mapped[int] = mapped_column(ForeignKey("buildings.id"), index=True)
+    room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     billing_month: Mapped[date] = mapped_column(Date, index=True)
     rent_amount: Mapped[int] = mapped_column(Integer, default=0)
@@ -211,6 +232,7 @@ class Invoice(Base, TimestampMixin):
     issued_date: Mapped[date] = mapped_column(Date, default=date.today)
 
     contract: Mapped[Contract] = relationship(back_populates="invoices")
+    building: Mapped[Building] = relationship(back_populates="invoices")
     payments: Mapped[list["Payment"]] = relationship(back_populates="invoice")
 
 

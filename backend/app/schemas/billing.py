@@ -34,7 +34,8 @@ class InvoiceBatchCreate(BaseModel):
 class InvoiceRead(ORMModel):
     id: int
     contract_id: int
-    room_id: int
+    building_id: int
+    room_id: int | None = None
     tenant_id: int
     billing_month: date
     rent_amount: int

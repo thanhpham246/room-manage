@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -24,15 +24,6 @@ const statuses = [
   ["under_renovation", "Đang sửa chữa"],
 ] as const;
 
-const amenities = [
-  ["wifi", "Wifi"],
-  ["camera", "Camera"],
-  ["elevator", "Thang máy"],
-  ["shared_washing_machine", "Máy giặt chung"],
-  ["parking", "Bãi xe"],
-  ["security", "Bảo vệ"],
-] as const;
-
 type FloorRow = {
   floor_number: number;
   name: string;
@@ -40,10 +31,8 @@ type FloorRow = {
 };
 
 type ExpenseRow = {
-  category: string;
   name: string;
   default_amount: number;
-  is_active: boolean;
 };
 
 export function BuildingForm({
@@ -57,24 +46,26 @@ export function BuildingForm({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const codeLocked = mode === "edit" && (building?.total_rooms ?? 0) > 0;
+  const houseTypeLocked = mode === "edit" && (building?.occupied_rooms ?? 0) > 0;
   const [numberOfFloors, setNumberOfFloors] = useState(building?.number_of_floors || 2);
   const [floorRows, setFloorRows] = useState<FloorRow[]>([
     { floor_number: 1, name: "Floor 1", expected_room_count: 2 },
     { floor_number: 2, name: "Floor 2", expected_room_count: 2 },
   ]);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(building?.amenities || []);
+  const [amenityRows, setAmenityRows] = useState<string[]>(
+    building?.amenities.length ? building.amenities : [""],
+  );
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>(
     building?.expense_templates.length
       ? building.expense_templates.map((template) => ({
-          category: template.category,
           name: template.name,
           default_amount: template.default_amount,
-          is_active: template.is_active,
         }))
       : [
-          { category: "internet", name: "Wifi", default_amount: 300000, is_active: true },
-          { category: "security", name: "Security", default_amount: 2000000, is_active: true },
-          { category: "cleaning", name: "Cleaning", default_amount: 500000, is_active: true },
+          { name: "Wifi", default_amount: 300000 },
+          { name: "Security", default_amount: 2000000 },
+          { name: "Cleaning", default_amount: 500000 },
         ],
   );
 
@@ -82,11 +73,9 @@ export function BuildingForm({
     event.preventDefault();
     setError(null);
     const formData = new FormData(event.currentTarget);
-    const payload = {
-      code: valueOrNull(formData.get("code")),
+    const payload: Record<string, unknown> = {
       name: String(formData.get("name") || ""),
       address: String(formData.get("address") || ""),
-      house_type: String(formData.get("house_type") || "boarding_house"),
       number_of_floors: numberOfFloors,
       owner_name: valueOrNull(formData.get("owner_name")),
       owner_phone: valueOrNull(formData.get("owner_phone")),
@@ -99,9 +88,20 @@ export function BuildingForm({
       emergency_contact_name: valueOrNull(formData.get("emergency_contact_name")),
       emergency_contact_phone: valueOrNull(formData.get("emergency_contact_phone")),
       note: valueOrNull(formData.get("note")),
-      amenities: selectedAmenities,
-      expense_templates: expenseRows.filter((row) => row.category && row.name),
+      amenities: amenityRows.map((row) => row.trim()).filter(Boolean),
+      expense_templates: expenseRows
+        .filter((row) => row.name.trim())
+        .map((row) => ({
+          name: row.name.trim(),
+          default_amount: row.default_amount,
+        })),
     };
+    if (!codeLocked) {
+      payload.code = valueOrNull(formData.get("code"));
+    }
+    if (!houseTypeLocked) {
+      payload.house_type = String(formData.get("house_type") || "boarding_house");
+    }
     const createPayload = {
       ...payload,
       default_room_rent_price: numberOrNull(formData.get("default_room_rent_price")),
@@ -122,20 +122,19 @@ export function BuildingForm({
     }
   }
 
-  function toggleAmenity(amenityKey: string) {
-    setSelectedAmenities((current) =>
-      current.includes(amenityKey)
-        ? current.filter((item) => item !== amenityKey)
-        : [...current, amenityKey],
-    );
-  }
-
   return (
     <form className="space-y-6" onSubmit={onSubmit}>
       <Card>
         <h2 className="text-base font-semibold text-ink">Thông tin cơ bản</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Mã nhà" name="code" defaultValue={building?.code} placeholder="HOUSE-001" />
+          <Field
+            disabled={codeLocked}
+            helper={codeLocked ? "Mã nhà bị khóa vì đã có phòng." : undefined}
+            label="Mã nhà"
+            name="code"
+            defaultValue={building?.code}
+            placeholder="HOUSE-001"
+          />
           <Field label="Tên nhà" name="name" defaultValue={building?.name} required />
           <Field label="Địa chỉ" name="address" defaultValue={building?.address} required />
           <label className="space-y-1">
@@ -143,6 +142,7 @@ export function BuildingForm({
             <select
               className="h-10 w-full rounded-md border border-border bg-white px-3 text-sm"
               defaultValue={building?.house_type || "boarding_house"}
+              disabled={houseTypeLocked}
               name="house_type"
             >
               {houseTypes.map(([value, label]) => (
@@ -151,6 +151,11 @@ export function BuildingForm({
                 </option>
               ))}
             </select>
+            {houseTypeLocked ? (
+              <span className="block text-xs text-slate-500">
+                Loại nhà bị khóa vì đang có hợp đồng hoạt động.
+              </span>
+            ) : null}
           </label>
           <label className="space-y-1">
             <span className="text-xs font-medium text-slate-500">Trạng thái</span>
@@ -261,30 +266,37 @@ export function BuildingForm({
 
       <Card>
         <h2 className="text-base font-semibold text-ink">Tiện ích</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {amenities.map(([value, label]) => (
-            <label className="flex items-center gap-2 text-sm text-slate-700" key={value}>
-              <input
-                checked={selectedAmenities.includes(value)}
-                onChange={() => toggleAmenity(value)}
-                type="checkbox"
+        <div className="mt-4 grid gap-3">
+          {amenityRows.map((row, index) => (
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]" key={index}>
+              <Input
+                aria-label={`Tên tiện ích ${index + 1}`}
+                value={row}
+                onChange={(event) => updateAmenityRow(index, event.target.value)}
+                placeholder="Wifi, Camera, Bãi xe..."
               />
-              {label}
-            </label>
+              <Button
+                aria-label={`Xóa tiện ích ${index + 1}`}
+                onClick={() => removeAmenityRow(index)}
+                type="button"
+                variant="secondary"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
           ))}
         </div>
+        <Button className="mt-3" onClick={addAmenityRow} type="button" variant="secondary">
+          <Plus className="size-4" />
+          Thêm tiện ích
+        </Button>
       </Card>
 
       <Card>
         <h2 className="text-base font-semibold text-ink">Chi phí chung hằng tháng</h2>
         <div className="mt-4 grid gap-3">
           {expenseRows.map((row, index) => (
-            <div className="grid gap-3 md:grid-cols-[1fr_1fr_180px]" key={`${row.category}-${index}`}>
-              <Input
-                aria-label={`Danh mục chi phí ${index + 1}`}
-                value={row.category}
-                onChange={(event) => updateExpenseRow(index, "category", event.target.value)}
-              />
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]" key={index}>
               <Input
                 aria-label={`Tên chi phí ${index + 1}`}
                 value={row.name}
@@ -298,9 +310,21 @@ export function BuildingForm({
                   updateExpenseRow(index, "default_amount", Number(event.target.value || 0))
                 }
               />
+              <Button
+                aria-label={`Xóa chi phí ${index + 1}`}
+                onClick={() => removeExpenseRow(index)}
+                type="button"
+                variant="secondary"
+              >
+                <Trash2 className="size-4" />
+              </Button>
             </div>
           ))}
         </div>
+        <Button className="mt-3" onClick={addExpenseRow} type="button" variant="secondary">
+          <Plus className="size-4" />
+          Thêm chi phí
+        </Button>
       </Card>
 
       <Card>
@@ -328,6 +352,28 @@ export function BuildingForm({
     );
   }
 
+  function addAmenityRow() {
+    setAmenityRows((current) => [...current, ""]);
+  }
+
+  function updateAmenityRow(index: number, value: string) {
+    setAmenityRows((current) =>
+      current.map((row, rowIndex) => (rowIndex === index ? value : row)),
+    );
+  }
+
+  function removeAmenityRow(index: number) {
+    setAmenityRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  function addExpenseRow() {
+    setExpenseRows((current) => [...current, { name: "", default_amount: 0 }]);
+  }
+
+  function removeExpenseRow(index: number) {
+    setExpenseRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
+
   function changeNumberOfFloors(value: string) {
     const nextCount = Number(value || 0);
     setNumberOfFloors(nextCount);
@@ -347,6 +393,8 @@ export function BuildingForm({
 
 function Field({
   defaultValue,
+  disabled,
+  helper,
   label,
   name,
   onChange,
@@ -356,6 +404,8 @@ function Field({
   value,
 }: {
   defaultValue?: string | number | null;
+  disabled?: boolean;
+  helper?: string;
   label: string;
   name: string;
   onChange?: (value: string) => void;
@@ -369,6 +419,7 @@ function Field({
       <span className="text-xs font-medium text-slate-500">{label}</span>
       <Input
         defaultValue={value === undefined ? (defaultValue ?? "") : undefined}
+        disabled={disabled}
         min={type === "number" ? 0 : undefined}
         name={name}
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
@@ -377,6 +428,7 @@ function Field({
         type={type}
         value={value}
       />
+      {helper ? <span className="block text-xs text-slate-500">{helper}</span> : null}
     </label>
   );
 }
